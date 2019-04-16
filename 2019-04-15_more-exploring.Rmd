@@ -1,0 +1,243 @@
+---
+title: "more exploration"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(DiagrammeR)
+library(dplyr)
+library(magrittr)
+
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = FALSE)
+```
+
+
+
+Previously I worked on creating a graph from a table object. It works well enough, although I need to figure out how I can represent parallel tasks effectively. 
+
+Now I'm thinking about how I can start getting some more complex plotting out of this. 
+
+Looking up GraphViz I found that there is some support for ['clusters'](https://graphviz.gitlab.io/_pages/Gallery/directed/cluster.html). At this point I'm wondering how much I'm going to be using R, compared to using this GraphViz platform. 
+
+I generated some practice process data, since my work probably doesn't want me showing the world their process.
+
+```{r}
+ms <- read.csv("mealslurry.csv")
+```
+
+So, to turn this into a graph, I can make some assumptions about at least the order of the top level process and the 'process', in that they are all in order. 
+
+
+## Working with the data
+
+### Taking a stab at `data.tree`
+
+```{r}
+library(data.tree)
+```
+
+So the data.tree package uses 'path to string' methods for data import. Let's try that
+
+```{r}
+ms$pathString <- paste("mealslurry",
+                       ms$top.level.process,
+                       ms$process,
+                       ms$task.definition,
+                       sep = "/")
+
+ms.dt <- as.Node(ms)
+print(ms.dt)
+```
+
+That's all well and good, but I think I'm losing the aspects of how my data really are a directed acyclic graph. 
+
+
+### Going back to DiagrammeR
+
+Since I have three levels, I want to experiment with creating smaller graphs, and then linking them together.
+
+working with dry goods
+
+```{r}
+dg <- ms %>% filter(top.level.process == "acquire dry goods")
+```
+
+So, for dry goods, there's no real process to the tasks, just that I do all of them at once (either online or in a grocery store)
+
+So I'm thinking that it would be two nodes, online to grocery store, with a bunch of leafs off each one.
+
+
+although it would probably be better to work with the cooking part of the graph
+
+```{r}
+cook <- ms %>% filter(top.level.process == "cooking")
+```
+
+
+```{r}
+# for some reason this is throwing an error.
+# if the cols are factors, it throws an error
+
+
+cook_gf <- create_graph()
+
+cook_gf %>% 
+add_nodes_from_df_cols( df = cook, columns = c("process", "task.definition")) %>% render_graph()
+```
+
+well this doesn't work that well
+
+
+
+```{r}
+create_node_df(n = length(cook$task.definition),
+               type = unique(cook$top.level.process),
+               label = cook$task.definition,
+               process = cook$process)
+```
+
+hmm, maybe I should be breaking it up into process
+
+```{r}
+cook.ls <- split(x = cook, f = cook$process)
+```
+
+
+So, for each process, I want to make some assumptions that there are no parallel steps (I feel like that's a poor assumption even as I write this). But this could make it easier to create individual DAGs, and then somehow cluster them together when the time comes (for this specific example the lentils and veg can be done in parallel ... too bad my data doesn't represent that :( )
+
+### Working with DAGs
+
+For each list element, make a DAG
+
+let's sketch out what I would do: 
+
+```{r}
+x <- cook.ls$lentils
+
+# create node df
+
+nodes_x <- create_node_df(n = length(x$top.level.process), label = x$task.definition, type = x$process,
+               top_level_process = x$top.level.process)
+# create edge df
+edges_x <- create_edge_df(from = 1:(length(x$top.level.process) -1), to = 2:(length(x$top.level.process)))
+# create graph
+create_graph(nodes_df = nodes_x, edges_df = edges_x) %>% render_graph
+```
+
+
+
+neat, let's make a function out of it
+
+```{r}
+MakeProcessDAG <- function(x){
+  # x is a dataframe containing the steps of one process
+  # expected cols are:
+  # top.level.process = the top level process from the RACI table
+  # process = the single process captured by this table
+  # task.definition = the tasks involved in the process
+  # assuming tasks are ordered sequentially
+  
+  n_tasks <- length(x$task.definition)
+  
+  # create node_df
+  nodes_x <- create_node_df(n = n_tasks,
+                            label = x$task.definition,
+                            type = x$process,
+                            top_level_process = x$top.level.process,
+                            shape = "plaintext") # this doesn't seem to work :(
+  # create edge df
+  if(n_tasks == 1){
+    # catching if there is only one task in a process
+    graph_x <- create_graph(nodes_x)
+    
+  }else{
+    edges_x <- create_edge_df(from = seq_len(n_tasks -1),
+                              to = 2:(n_tasks))
+    # create graph
+    graph_x <- create_graph(nodes_df = nodes_x, edges_df = edges_x)
+  }
+  
+  return(graph_x)
+}
+```
+
+#### Results {.tab .tabset-fade}
+
+
+##### lentils
+
+```{r}
+MakeProcessDAG(cook.ls$lentils) %>% render_graph()
+```
+
+
+##### cook
+
+```{r}
+MakeProcessDAG(cook.ls$cook) %>% render_graph()
+```
+
+
+##### blend
+
+```{r}
+MakeProcessDAG(cook.ls$blend) %>% render_graph()
+```
+
+
+#### Using the function
+
+```{r}
+# switching style to not using . in names, #whatever
+cookgh_ls <- lapply(cook.ls, MakeProcessDAG)
+```
+
+#### Now how to connect them together ...
+
+OK, I have all the individual processes turned into DAGs, but now how can I connect them together? 
+
+Looks like the github.io docs actually has some content that is meaningful
+
+`combine_graphs`
+
+```{r}
+combine_graphs(cookgh_ls$lentils, cookgh_ls$cook) %>% 
+  render_graph
+```
+
+understandably this doesn't connect the two graphs
+
+```{r}
+combine_graphs(cookgh_ls$lentils, cookgh_ls$cook) %>% 
+  get_node_df()
+```
+
+.... so I'm realzing that I could probably just create a graph for the entire cooking process
+
+```{r}
+n_cook_tasks <- length(cook$task.definition)
+
+cook_nodes <- create_node_df(n = n_cook_tasks,
+                             label = cook$task.definition, 
+                             type = cook$process,
+                             top_level_process = cook$top.level.process)
+cook_edges <- create_edge_df(from = seq_len(n_cook_tasks - 1), 
+                             to = 2:n_cook_tasks)
+
+cook_graph <- create_graph(nodes_df = cook_nodes, edges_df = cook_edges)
+
+render_graph(cook_graph, layout = "circle")
+```
+
+Now, how do I get some kind of boxes around the sections that are the different process?
+
+
+playing around with the `render_graph` function, turns out visNetwork can give you some nice functionality, and it seems to color based on type without me specifying it. So that's something. ... also, it lays out differently each time ... strange :/
+
+```{r}
+render_graph(cook_graph, output = "visNetwork", layout = "circle")
+```
+
+
+

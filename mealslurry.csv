@@ -1,0 +1,34 @@
+top-level-process,process,task-definition
+acquire dry goods,online shopping,buy crickets
+acquire dry goods,online shopping,buy curry powder
+acquire dry goods,online shopping,buy whey powder
+acquire dry goods,online shopping,citric acid
+acquire dry goods,online shopping,crushed red pepper
+acquire dry goods,online shopping,black pepper
+acquire dry goods,grocery store,salt
+acquire dry goods,grocery store,garlic powder
+acquire dry goods,grocery store,dried diced onions
+acquire grocery goods,grocery store,buy butter
+acquire grocery goods,grocery store,buy frozen vegetables
+acquire grocery goods,grocery store,buy yogurt
+cooking,lentils,soak lentils
+cooking,lentils,cook lentils
+cooking,lentils,cool lentils
+cooking,lentils,inoculate with yogurt
+cooking,lentils,blend
+cooking,lentils,let stand 24hr
+cooking,cook,heat lentils
+cooking,cook,add spices to lentils
+cooking,cook,combine butter and vegetables
+cooking,cook,add garlic and onion to vegetables
+cooking,blend,blend lentils
+portion,prep jars,collect jars
+portion,prep jars,open
+portion,prep jars,get funnel and spoon
+portion,load jars,3 scoops per jar lentils
+portion,load jars,add vegetables to lentil
+portion,load jars,sitr
+portion,load jars,3 scoops per jar + remaining
+portion,load jars,tighten lids on jars
+storage,cool,cool for a couple hours
+storage,fridge,place in fridge

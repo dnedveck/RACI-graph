@@ -1,0 +1,120 @@
+---
+title: "exploring diagrammeR"
+author: "Derek"
+date: "April 9, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(DiagrammeR)
+
+library(magrittr)
+library(dplyr)
+
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## tooling around
+
+So eventually I want to take some tabular data, and make a workflow diagram out of that. DiagrammeR has GraphViz integration, which is neat, but I'm interested in scripting / programmatic creation of visualizations. 
+
+
+
+From the documentation, it seems that in making a graph structure from tabular data, there needs to be a 1) Node Data Frame, and 2) an Edge Data Frame (NDF and EDF).
+
+Let's mock up some data so I can play around with it.
+
+```{r}
+eat <- tibble::tribble(
+         ~ID,              ~process, ~nextstep,
+          1L,           "get bread",        2L,
+          2L, "open jars of spread",        3L,
+          3L,     "spread on bread",        4L,
+          4L,                 "???",        5L,
+          5L,              "PROFIT",        NA
+         )
+
+```
+
+
+From this example I have a simple process, and a column denoting the next step.
+
+Let's make an NDF and EDF from this. 
+
+```{r, eval = FALSE}
+create_nodes(nodes = eat$process)
+# Error in create_nodes(nodes = eat$process) : 
+#   could not find function "create_nodes"
+```
+ 
+ *Great, the documentation doesn't match*
+ 
+Also, what's kind of weird is that the GitHub readme has another way of thinking about creating graphs, using a more pipe-oriented approach: https://github.com/rich-iannone/DiagrammeR
+
+Looks like `create_node_df` is my closest bet -- let's read the help content
+
+```{r}
+eat_node <- create_node_df(n = length(eat$process), label = eat$process)
+
+eat_edge <- eat %>% filter(!(is.na(ID)), !(is.na(nextstep))) %>% 
+  with(., create_edge_df(from = .$ID, to = .$nextstep, rel = "next step"))
+```
+
+Blend them together
+
+```{r}
+create_graph(eat_node, eat_edge) %>% render_graph()
+```
+
+
+## Fancier graph
+
+```{r}
+eat <- tibble::tribble(
+         ~ID, ~process,                         ~step, ~nextstep,
+          1L,  "bread",                   "get bread",        2L,
+          2L,  "bread",              "place 2 slices",        3L,
+          3L, "spread",             "get two spreads",        4L,
+          4L, "spread",         "open jars of spread",        5L,
+          5L, "spread",     "spread one on one bread",        7L,
+          6L, "spread", "spread other on other bread",        7L,
+          7L,   "prep",                 "close bread",        8L,
+          8L, "finish",                         "???",       9L,
+         9L, "finish",                      "PROFIT",        NA
+         )
+
+```
+
+
+```{r}
+eat_node <- create_node_df(n = length(eat$step), label = eat$step, type = eat$process)
+
+eat_edge <- eat %>% filter(!(is.na(ID)), !(is.na(nextstep))) %>% 
+  with(., create_edge_df(from = .$ID, to = .$nextstep, rel = "next step"))
+```
+
+Blend them together
+
+```{r}
+create_graph(eat_node, eat_edge) %>% render_graph()
+```
+
+Ah, this is going to be a little tricky to get a graph to split and come back together (e.g. parallel steps).
+
+
+I'm thinking that I'm going to have to do something to capture how processes can split, capture this in a table, and then easily, and then somehow build edges from this. 
+
+
+
+**Noodling around some more I found a different version of the docs**: http://visualizers.co/diagrammer/reference/index.html
+
+
+## What graphing packages are available?
+
+- DiagrammeR (from RStudio)
+  - last development done in ~ 6 months ago
+- igraph (https://igraph.org/r/)
+- networkD3
+
